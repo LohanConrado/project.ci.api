@@ -1,0 +1,22 @@
+services:
+  postgres:
+    container_name: project-postgres
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: project-user
+      POSTGRES_PASSWORD: secret
+      schema: public
+      POSTGRES_DB: project-db
+    ports:
+      - '5430:5432'
+
+  api:
+    container_name: project
+    build: .
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      PORT: 3000
+      DATABASE_URL: 'postgresql://project-user:secret@postgres:5432/project-db?schema=public&connection_limit=30&connect_timeout=30'

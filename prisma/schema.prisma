@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Users {
+  id       Int      @id @default(autoincrement())
+  nome     String   @db.VarChar(255)
+  email    String   @unique @db.VarChar(255)
+  telefone String?  @db.VarChar(20)
+  criadoEm DateTime @default(now())
+
+  enderecos UserEnderecos[]
+
+  @@map("users")
+}
+
+model UserEnderecos {
+  id          Int     @id @default(autoincrement())
+  rua         String  @db.VarChar(255)
+  numero      String  @db.VarChar(20)
+  complemento String? @db.VarChar(255)
+  bairro      String  @db.VarChar(255)
+  cidade      String  @db.VarChar(255)
+  estado      String  @db.VarChar(2)
+  cep         String  @db.VarChar(10)
+
+  usuarioId Int
+  usuario   Users @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("user_enderecos")
+}
