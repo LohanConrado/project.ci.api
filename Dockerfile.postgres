@@ -1,1 +1,6 @@
 FROM postgres:16-alpine
+
+# Copia o script de inicialização para o diretório especial do PostgreSQL.
+# Todos os arquivos .sql e .sh nesse diretório são executados automaticamente
+# na primeira inicialização do container (quando o volume ainda está vazio).
+COPY docker/postgres/initdb/*.sql /docker-entrypoint-initdb.d/

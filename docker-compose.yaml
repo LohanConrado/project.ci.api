@@ -1,23 +1,42 @@
+volumes:
+  project-volume:
+
+networks:
+  project-network:
+    driver: bridge
+
 services:
   postgres:
     container_name: project-postgres
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    networks:
+      - project-network
     restart: always
     environment:
-      POSTGRES_USER: project-user
-      POSTGRES_PASSWORD: secret
-      schema: public
-      POSTGRES_DB: project-db
+      # Usuário root do PostgreSQL (administração interna do container)
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root_secret
+      POSTGRES_DB: project_db
+      # Variáveis usadas pelo script 01-init-app-user.sql via psql interno
+      APP_DB_USER: app_user
+      APP_DB_PASSWORD: app_secret
+    volumes:
+      - project-volume:/var/lib/postgresql/data
     ports:
       - '5430:5432'
 
   api:
     container_name: project
     build: .
+    networks:
+      - project-network
     restart: always
     depends_on:
       - postgres
     environment:
-      DATABASE_URL: 'postgresql://project-user:secret@postgres:5432/project-db?schema=public&connection_limit=30&connect_timeout=30'
+      # A aplicação conecta com o usuário restrito, não com o root
+      DATABASE_URL: 'postgresql://app_user:app_secret@postgres:5432/project_db?schema=public&connection_limit=30&connect_timeout=30'
     ports:
-      - '3000:3000'
+      - '3000:3000'
