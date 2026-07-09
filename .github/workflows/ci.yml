@@ -24,5 +24,5 @@ jobs:
       - name: Build docker image
         run: docker build -t project-ci-api:latest .
 
-      - name: Push docker image
-        run: docker push project-ci-api:latest
+      # - name: Push docker image
+      #   run: docker push project-ci-api:latest
