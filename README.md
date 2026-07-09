@@ -1,6 +1,7 @@
-# 🐳 project-name — Ambiente Multi-Container com Docker
+# 🐳 project.ci.api — Ambiente Multi-Container com Docker
 
-Aplicação **NestJS** com banco de dados **PostgreSQL**, orquestrada com **Docker Compose**.  
+Aplicação **NestJS** com banco de dados **PostgreSQL**, orquestrada com **Docker Compose**.
+Agora também conta com um script de configuração Github Actions para teste de CI.
 Este README documenta o processo completo de configuração, execução e testes do ambiente.
 
 ---
