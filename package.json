@@ -1,5 +1,5 @@
 {
-  "name": "project-name",
+  "name": "project-ci-api",
   "version": "0.1.0",
   "description": "",
   "author": "",
@@ -77,5 +77,8 @@
     "@prisma/engines@7.8.0": true,
     "prisma@7.8.0": true,
     "unrs-resolver@1.12.2": true
+  },
+  "overrides": {
+    "@hono/node-server": "^1.19.13"
   }
 }
