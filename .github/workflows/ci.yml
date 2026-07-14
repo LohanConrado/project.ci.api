@@ -56,12 +56,29 @@ jobs:
 
           
       - name: Build docker image
+        id: build-docker-image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           TAG: ${{ steps.generate_tag.outputs.sha }}
         run: | 
           docker build -t $REGISTRY/project-ci-api:$TAG .
           docker push $REGISTRY/project-ci-api:$TAG
+          IMAGE=$(echo $REGISTRY/project-ci-api:$TAG)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+      
+      - name: Deploy to ECS Express
+        uses: awslabs/amazon-app-runner-deploy@main
+        with:
+          service: project-ci-api
+          image: ${{steps.build-docker-image}}
+          acess-role-arn: "${{secrets.AWS_EXECUTION_ROLE_ARN}}"
+          region: sa-east-1
+          cpu: 1
+          memory: 1
+          port: 3000
+
+
+
 
       # - name: Push image
       #   run: docker push lohanflores/project-ci-api:${{ steps.generate_tag.outputs.sha }}
