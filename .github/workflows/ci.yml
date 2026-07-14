@@ -57,6 +57,7 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-express-service@v1
         with:
           service-name: project-ci-api
+          cluster: project-ci-api-cluster
           image: ${{ steps.build-docker-image.outputs.image }}
           execution-role-arn: ${{ secrets.AWS_EXECUTION_ROLE_ARN }}
           infrastructure-role-arn: ${{ secrets.AWS_INFRA_ROLE_ARN }}
