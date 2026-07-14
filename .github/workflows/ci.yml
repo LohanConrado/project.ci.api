@@ -34,7 +34,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: '218549829959.dkr.ecr.sa-east-1.amazonaws.com/project-ci-api'
+          role-to-assume: '${{ secrets.AWS_ROLE_ARN }}'
           aws-region: sa-east-1
 
       - name: Login to AWS ECR
@@ -62,7 +62,7 @@ jobs:
         run: | 
           docker build -t $REGISTRY/project-ci-api:$TAG .
           docker push $REGISTRY/project-ci-api:$TAG
-          
+
       # - name: Push image
       #   run: docker push lohanflores/project-ci-api:${{ steps.generate_tag.outputs.sha }}
 
