@@ -42,7 +42,6 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
 
-
       - name: Build docker image
         id: build-docker-image
         env:
