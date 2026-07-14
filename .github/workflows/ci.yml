@@ -41,6 +41,27 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+
+
+      - name: Build docker image
+        id: build-docker-image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          TAG: ${{ steps.generate_tag.outputs.sha }}
+        run: |
+          docker build -t $REGISTRY/project-ci-api:$TAG .
+          docker push $REGISTRY/project-ci-api:$TAG
+          IMAGE=$(echo $REGISTRY/project-ci-api:$TAG)
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+
+      - name: Deploy to ECS Express
+        uses: aws-actions/amazon-ecs-deploy-express-service@v1
+        with:
+          service-name: project-ci-api
+          image: ${{ steps.build-docker-image.outputs.image }}
+          execution-role-arn: ${{ secrets.AWS_EXECUTION_ROLE_ARN }}
+          infrastructure-role-arn: ${{ secrets.AWS_INFRA_ROLE_ARN }}
+
       # - name: Login into the container registry
       #   uses: docker/login-action@v4
       #   with:
@@ -52,25 +73,6 @@ jobs:
       #   with:
       #     push: true
       #     tags: lohanflores/project-ci-api:${{ steps.generate_tag.outputs.sha }}, lohanflores/project-ci-api:latest
-
-      - name: Build docker image
-        id: build-docker-image
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          TAG: ${{ steps.generate_tag.outputs.sha }}
-        run: |
-          docker build -t $REGISTRY/project-ci-api:$TAG .
-          docker push $REGISTRY/project-ci-api:$TAG
-          IMAGE=$(echo $REGISTRY/project-ci-api:$TAG)
-          echo "sha=$SHA" >> $GITHUB_OUTPUT
-
-      - name: Deploy to ECS Express
-        uses: aws-actions/amazon-ecs-deploy-express-service@v1
-        with:
-          service-name: project-ci-api
-          image: ${{steps.build-docker-image}}
-          execution-role-arn: ${{secrets.AWS_EXECUTION_ROLE_ARN}}
-          infrastructure-role-arn: ${{secrets.AWS_INFRA_ROLE_ARN}}
 
       # - name: Push image
       #   run: docker push lohanflores/project-ci-api:${{ steps.generate_tag.outputs.sha }}
