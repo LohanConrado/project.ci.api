@@ -3,7 +3,6 @@ FROM node:26-alpine3.23 AS build
 WORKDIR /usr/src/app
 
 COPY package*.json ./
-COPY prisma ./prisma
 
 RUN npm ci
 
@@ -21,10 +20,8 @@ ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
 COPY --from=build /usr/src/app/package*.json ./
-COPY --from=build /usr/src/app/prisma.config.ts ./
 COPY --from=build /usr/src/app/dist ./dist
 COPY --from=build /usr/src/app/node_modules ./node_modules
-COPY --from=build /usr/src/app/prisma ./prisma
 
 EXPOSE 3000
 
