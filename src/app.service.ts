@@ -7,7 +7,11 @@ export class AppService {
     return 'Hello World!';
   }
 
-  getHealth(): string {
-    return 'OK';
+  getHealth() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+    };
   }
 }
