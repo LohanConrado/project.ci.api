@@ -11,7 +11,6 @@ COPY . .
 
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/db"
 
-RUN npx prisma generate
 RUN npm run build
 RUN npm prune --omit=dev && npm cache clean --force
 
@@ -29,4 +28,4 @@ COPY --from=build /usr/src/app/prisma ./prisma
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/main.js"]
+CMD ["sh", "-c", "exec node dist/main.js"]

@@ -61,6 +61,8 @@ jobs:
           image: ${{ steps.build-docker-image.outputs.image }}
           execution-role-arn: ${{ secrets.AWS_EXECUTION_ROLE_ARN }}
           infrastructure-role-arn: ${{ secrets.AWS_INFRA_ROLE_ARN }}
+          cpu: '1024'
+          memory: '2048'
 
       # - name: Login into the container registry
       #   uses: docker/login-action@v4
