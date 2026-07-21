@@ -41,7 +41,6 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-
       - name: Build docker image
         id: build-docker-image
         env:
@@ -50,6 +49,8 @@ jobs:
         run: |
           docker build -t $REGISTRY/project-ci-api:$TAG .
           docker push $REGISTRY/project-ci-api:$TAG
+          docker tag -t $REGISTRY/project-ci-api:$TAG $REGISTRY/project-ci-api:latest
+          docker push $REGISTRY/project-ci-api:latest
           IMAGE=$(echo $REGISTRY/project-ci-api:$TAG)
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
@@ -63,6 +64,7 @@ jobs:
           infrastructure-role-arn: ${{ secrets.AWS_INFRA_ROLE_ARN }}
           cpu: '1024'
           memory: '2048'
+          wait-to
 
       # - name: Login into the container registry
       #   uses: docker/login-action@v4
