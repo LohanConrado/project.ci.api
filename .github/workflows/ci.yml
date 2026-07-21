@@ -25,6 +25,11 @@ jobs:
       - run: npm ci
       - run: npm test
 
+      - name: Semantic Release
+        uses: cycjimmy/semantic-release-action@v6
+        env: 
+          GITHUB_TOKEN: ${{secrets.GH_TOKEN}}
+
       - name: Generate tag
         id: generate_tag
         run: |
