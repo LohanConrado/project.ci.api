@@ -23,6 +23,6 @@ COPY --from=build /usr/src/app/package*.json ./
 COPY --from=build /usr/src/app/dist ./dist
 COPY --from=build /usr/src/app/node_modules ./node_modules
 
-EXPOSE 80
+EXPOSE 3000
 
 CMD ["sh", "-c", "exec node dist/main.js"]
