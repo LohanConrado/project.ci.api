@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/LohanConrado/project.ci.api/compare/v1.0.0...v1.1.0) (2026-07-22)
+
+
+### Features
+
+* atualizar configuração do Dependabot para gerenciar GitHub Actions, NPM e Docker ([061829c](https://github.com/LohanConrado/project.ci.api/commit/061829cf65cd854b6152688efb5962c7856d5a31))
+
 # 1.0.0 (2026-07-22)
 
 
