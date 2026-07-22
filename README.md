@@ -1,510 +1,127 @@
-# 🐳 project.ci.api — Ambiente Multi-Container com Docker
+# 🚀 project.ci.api — API NestJS na AWS (ECR/ECS)
 
-Aplicação **NestJS** com banco de dados **PostgreSQL**, orquestrada com **Docker Compose**.
-Agora também conta com um script de configuração Github Actions para teste de CI.
-Este README documenta o processo completo de configuração, execução e testes do ambiente.
+Aplicação **NestJS** conteinerizada, configurada com pipelines automatizados de CI/CD via **GitHub Actions** para realizar testes, *releases* semânticos e *deploy* contínuo na nuvem da **AWS**.
+
+Neste momento, a aplicação foca na conteinerização da API (utilizando seu `Dockerfile`) e no seu deploy no **AWS Elastic Container Service (ECS)**, utilizando o **AWS Elastic Container Registry (ECR)** para armazenar as imagens. Bancos de dados locais via *Docker Compose* não estão sendo provisionados simultaneamente neste escopo.
 
 ---
 
 ## 📋 Índice
 
-- [Visão Geral da Arquitetura](#visão-geral-da-arquitetura)
-- [Pré-requisitos](#pré-requisitos)
-- [Estrutura de Arquivos](#estrutura-de-arquivos)
-- [Configuração das Variáveis de Ambiente](#configuração-das-variáveis-de-ambiente)
+- [Visão Geral da Arquitetura na Nuvem](#visão-geral-da-arquitetura-na-nuvem)
+- [Estrutura do Projeto](#estrutura-do-projeto)
+- [Executando Localmente](#executando-localmente)
 - [Dockerfile da Aplicação (Multi-Stage Build)](#dockerfile-da-aplicação-multi-stage-build)
-- [Dockerfile do PostgreSQL](#dockerfile-do-postgresql)
-- [Segurança: Usuário Restrito no Banco de Dados](#segurança-usuário-restrito-no-banco-de-dados)
-- [Docker Compose — Serviços, Rede e Volumes](#docker-compose--serviços-rede-e-volumes)
-- [Executando os Containers](#executando-os-containers)
-- [Testando a Conexão entre os Containers](#testando-a-conexão-entre-os-containers)
-- [Comandos Úteis](#comandos-úteis)
+- [Integração Contínua (CI/CD) e Deploy na AWS](#integração-contínua-cicd-e-deploy-na-aws)
+- [Segurança e Dependabot](#segurança-e-dependabot)
 
 ---
 
-## Visão Geral da Arquitetura
+## Visão Geral da Arquitetura na Nuvem
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    project-network (bridge)              │
-│                                                         │
-│  ┌──────────────────┐       ┌──────────────────────┐   │
-│  │  api (NestJS)    │──────▶│  postgres            │   │
-│  │  porta: 3000     │       │  porta interna: 5432 │   │
-│  │  container:      │       │  container:          │   │
-│  │    project       │       │    project-postgres   │   │
-│  └──────────────────┘       └──────────┬───────────┘   │
-│                                         │               │
-└─────────────────────────────────────────┼───────────────┘
-                                          │
-                                 ┌────────▼────────┐
-                                 │  project-volume  │
-                                 │  (dados PG)      │
-                                 └─────────────────┘
+O pipeline entrega as imagens construídas diretamente na AWS, dispensando a necessidade de orquestração local complexa no momento do *deploy*.
+
+```text
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│ GitHub Actions  │ ────▶ │    AWS ECR      │ ────▶ │    AWS ECS      │
+│ (CI/CD Pipeline)│ Push  │ (Registry de    │ Pull  │ (Container      │
+│ Build & Test    │ Image │  Imagens Docker)│ Image │  Orchestration) │
+└─────────────────┘       └─────────────────┘       └─────────────────┘
+                                                             │
+                                                             ▼
+                                                    ┌─────────────────┐
+                                                    │ API NestJS      │
+                                                    │ (Exposta 3000)  │
+                                                    └─────────────────┘
 ```
 
-| Componente      | Tecnologia          | Versão      |
-|-----------------|---------------------|-------------|
-| API             | NestJS + TypeScript  | Node 26     |
-| ORM             | Prisma               | v7          |
-| Banco de dados  | PostgreSQL           | 18 (Alpine) |
-| Orquestrador    | Docker Compose       | v2+         |
-| Imagem base     | `node:26-alpine3.23` | Alpine      |
+| Componente      | Tecnologia          | Função                        |
+|-----------------|---------------------|-------------------------------|
+| API             | NestJS + TypeScript | Lógica de negócio             |
+| Container       | Docker              | Empacotamento (`Dockerfile`)  |
+| Nuvem (Deploy)  | AWS ECS Express     | Execução / Orquestração       |
+| Imagens         | AWS ECR             | Armazenamento seguro de Docker|
+| Imagem Base     | `node:26-alpine`    | Runtime leve, focado na API   |
 
 ---
 
-## Pré-requisitos
+## Estrutura do Projeto
 
-Antes de começar, certifique-se de ter instalado:
+Os arquivos principais referentes ao funcionamento e implantação atual:
 
-- [Docker](https://www.docker.com/) `>= 24`
-- [Docker Compose](https://docs.docker.com/compose/) `>= 2`
-
-```bash
-# Verificar versões instaladas
-docker --version
-docker compose version
-```
-
----
-
-## Estrutura de Arquivos
-
-```
+```text
 project-name/
 │
 ├── Dockerfile                          # Build multi-stage da API (NestJS)
-├── Dockerfile.postgres                 # Imagem customizada do PostgreSQL
-├── docker-compose.yaml                 # Orquestração dos serviços
-├── .env                                # Variáveis de ambiente locais (não commitado)
+├── .github/                            # Configurações do GitHub
+│   ├── workflows/ci.yml                # CI/CD (Testes, AWS ECR/ECS, Semantic Release)
+│   └── dependabot.yml                  # Atualizações de dependências
 ├── .env.example                        # Modelo de variáveis de ambiente
-├── .dockerignore                       # Arquivos ignorados pelo Docker build
-│
-├── docker/
-│   └── postgres/
-│       └── initdb/
-│           └── 01-init-app-user.sql    # Script de criação do usuário restrito
-│
-├── prisma/
-│   └── schema.prisma                   # Schema do banco de dados (Prisma ORM)
-│
-├── prisma.config.ts                    # Configuração do Prisma CLI
-└── src/                                # Código-fonte da aplicação NestJS
+├── src/                                # Código-fonte da aplicação NestJS
+└── prisma/                             # Schema do banco de dados (Prisma ORM)
 ```
+
+*(Nota: Arquivos como `docker-compose.yaml` ou configurações de Postgres locais podem existir para ambientes isolados de dev, mas o deploy atual baseia-se estritamente no `Dockerfile` da aplicação).*
 
 ---
 
-## Configuração das Variáveis de Ambiente
+## Executando Localmente
 
-As variáveis de ambiente são usadas para **isolar configurações sensíveis do código-fonte**, seguindo os princípios de [12-factor apps](https://12factor.net/).
+Para rodar a aplicação localmente sem depender de orquestradores de múltiplos containers, você pode apenas buildar e iniciar a API.
 
-### 1. Criar o arquivo `.env` a partir do modelo
+### 1. Configurar Variáveis
 
 ```bash
 cp .env.example .env
+# Edite o .env, informando uma DATABASE_URL válida se necessário.
 ```
 
-### 2. Editar o arquivo `.env` com os valores do ambiente
+### 2. Rodando via Docker (Recomendado)
 
-```dotenv
-# ──────────────────────────────────────────
-# APLICAÇÃO
-# ──────────────────────────────────────────
-PORT=3000
+Faz o build da imagem isolada da aplicação e a executa:
 
-# ──────────────────────────────────────────
-# BANCO DE DADOS (usuário root — administração)
-# ──────────────────────────────────────────
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=root_secret
-POSTGRES_DB=project_db
+```bash
+# Build da imagem
+docker build -t project-ci-api .
 
-# ──────────────────────────────────────────
-# BANCO DE DADOS (usuário da aplicação — menor privilégio)
-# ──────────────────────────────────────────
-APP_DB_USER=app_user
-APP_DB_PASSWORD=app_secret
-
-# ──────────────────────────────────────────
-# URL DE CONEXÃO (usada pela aplicação e pelo Prisma)
-# Formato: postgresql://<user>:<password>@<host>:<port>/<db>
-# ──────────────────────────────────────────
-DATABASE_URL=postgresql://app_user:app_secret@postgres:5432/project_db?schema=public&connection_limit=30&connect_timeout=30
+# Rodar o container expondo a porta 3000
+docker run -p 3000:3000 --env-file .env project-ci-api
 ```
 
-> **⚠️ Atenção:** O arquivo `.env` está listado no `.gitignore` e **não deve ser commitado** no repositório. Nunca exponha senhas, tokens ou chaves de API no controle de versão.
+### 3. Rodando via Node.js (Desenvolvimento)
 
-### Como as variáveis são consumidas
-
-| Variável            | Consumido por             | Onde é usado                         |
-|---------------------|---------------------------|--------------------------------------|
-| `POSTGRES_USER`     | Docker Compose → postgres | Inicialização do container PG        |
-| `POSTGRES_PASSWORD` | Docker Compose → postgres | Senha do superusuário do PG          |
-| `POSTGRES_DB`       | Docker Compose → postgres | Nome do banco criado automaticamente |
-| `APP_DB_USER`       | Docker Compose → postgres | Repassado ao script SQL de init      |
-| `APP_DB_PASSWORD`   | Docker Compose → postgres | Senha do usuário da aplicação        |
-| `DATABASE_URL`      | Docker Compose → api      | String de conexão do Prisma/NestJS   |
+```bash
+npm install
+npm run start:dev
+```
 
 ---
 
 ## Dockerfile da Aplicação (Multi-Stage Build)
 
-O arquivo [`Dockerfile`](./Dockerfile) utiliza **múltiplos estágios** (`multi-stage build`) para produzir uma imagem final enxuta e segura, baseada na imagem **Alpine**.
+O arquivo [`Dockerfile`](./Dockerfile) foi arquitetado para produzir uma imagem leve e segura para a AWS, utilizando múltiplos estágios baseados no **Alpine Linux**.
 
-```dockerfile
-# ──────────────────────────────────────────
-# ESTÁGIO 1: build
-# Instala dependências, gera o client Prisma e compila o TypeScript
-# ──────────────────────────────────────────
-FROM node:26-alpine3.23 AS build
-
-WORKDIR /usr/src/app
-
-# Copia apenas os arquivos necessários para instalar dependências
-# (aproveitando o cache de camadas do Docker)
-COPY package*.json ./
-COPY prisma ./prisma
-
-# Instala todas as dependências (incluindo devDependencies para o build)
-RUN npm ci
-
-# Copia o restante do código
-COPY . .
-
-# Gera o client Prisma, compila o TypeScript e remove devDependencies
-RUN npx prisma generate
-RUN npm run build
-RUN npm prune --omit=dev && npm cache clean --force
-
-# ──────────────────────────────────────────
-# ESTÁGIO 2: runtime
-# Copia apenas os artefatos necessários do estágio anterior
-# Resulta em uma imagem final muito menor
-# ──────────────────────────────────────────
-FROM node:26-alpine3.23
-
-ENV NODE_ENV=production
-
-WORKDIR /usr/src/app
-
-# Copia apenas o necessário do estágio de build
-COPY --from=build /usr/src/app/package*.json ./
-COPY --from=build /usr/src/app/prisma.config.ts ./
-COPY --from=build /usr/src/app/dist ./dist
-COPY --from=build /usr/src/app/node_modules ./node_modules
-COPY --from=build /usr/src/app/prisma ./prisma
-
-EXPOSE 3000
-
-# Executa as migrations pendentes antes de iniciar a aplicação
-CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/main.js"]
-```
-
-### Por que Multi-Stage + Alpine?
-
-| Benefício                | Descrição                                                                  |
-|--------------------------|----------------------------------------------------------------------------|
-| **Imagem menor**         | A imagem final não contém compilador TypeScript, devDependencies ou cache  |
-| **Segurança**            | Menor superfície de ataque — Alpine tem menos pacotes instalados            |
-| **Cache eficiente**      | `COPY package*.json` antes do `COPY . .` maximiza o reuso de camadas      |
-| **Sem secrets no build** | Nenhuma senha é passada como argumento de build (`ARG`)                    |
+1. **Estágio 1 (Build):** Instala todas as dependências (incluindo `devDependencies`), compila o TypeScript e gera o cliente Prisma. Em seguida, limpa o cache.
+2. **Estágio 2 (Runtime):** Copia **apenas** os artefatos compilados (`dist/`) e dependências de produção (`node_modules/` sem *dev*) para uma imagem final enxuta, resultando em inicializações (*cold starts*) muito mais rápidas no AWS ECS e consumindo menos armazenamento no ECR.
 
 ---
 
-## Dockerfile do PostgreSQL
+## Integração Contínua (CI/CD) e Deploy na AWS
 
-O arquivo [`Dockerfile.postgres`](./Dockerfile.postgres) estende a imagem oficial do PostgreSQL 18 Alpine para incluir o script de inicialização do usuário restrito da aplicação.
-```dockerfile
-FROM postgres:18-alpine
+O arquivo de pipeline [`ci.yml`](.github/workflows/ci.yml) é o coração da operação. Disparado a cada `push` na branch `main`, ele assegura que a AWS sempre tenha a última versão saudável do código.
 
-# Copia o script de inicialização para o diretório especial do PostgreSQL.
-# Todos os arquivos .sql e .sh nesse diretório são executados automaticamente
-# na primeira inicialização do container (quando o volume ainda está vazio).
-COPY docker/postgres/initdb/*.sql /docker-entrypoint-initdb.d/
-```
-
-O script copiado é executado **automaticamente e apenas uma vez**, na primeira vez que o container inicializa com um volume vazio.
+1. **Testes Contínuos:** Configura o ambiente Node, instala dependências e executa a suíte de testes (`npm test`).
+2. **Semantic Release:** Utiliza o comando `npx semantic-release` nativo para gerar *changelogs*, analisar commits e criar a próxima versão de release sem dependências de ações de terceiros duvidosas.
+3. **Autenticação Segura (OIDC):** A action autentica na AWS assumindo roles do IAM de forma segura, sem armazenar as chaves estáticas (`AWS_ACCESS_KEY_ID`) no repositório.
+4. **Build & AWS ECR:** A imagem Docker é gerada durante a execução da *Action* e submetida ao Amazon Elastic Container Registry (taggeada com o *hash* do commit e com `latest`).
+5. **AWS ECS Express Deploy:** Ao finalizar o envio pro registro, notifica e atualiza o serviço no Amazon Elastic Container Service (ECS) para servir a nova imagem instantaneamente na infraestrutura pré-provisionada.
 
 ---
 
-## Segurança: Usuário Restrito no Banco de Dados
+## Segurança e Dependabot
 
-Em vez de conectar a aplicação com o usuário `root` (superusuário), um **usuário dedicado com permissões mínimas** é criado via script SQL, seguindo o princípio do **menor privilégio**.
+A saúde dos pacotes e configurações é mantida automaticamente pelo **Dependabot** (arquivo `.github/dependabot.yml`). Toda semana, ele escaneia e atualiza (via Pull Requests automáticos):
 
-O script [`docker/postgres/initdb/01-init-app-user.sql`](./docker/postgres/initdb/01-init-app-user.sql) é executado automaticamente na primeira inicialização:
-
-```sql
--- Cria o usuário da aplicação (sem privilégios de superusuário)
-CREATE USER app_user WITH PASSWORD 'app_secret';
-
--- Concede acesso ao banco de dados da aplicação
-GRANT CONNECT ON DATABASE project_db TO app_user;
-
--- Concede permissão de uso no schema public
-GRANT USAGE ON SCHEMA public TO app_user;
-
--- Concede apenas as operações DML necessárias (sem DROP, CREATE, TRUNCATE)
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
-
--- Garante que novas tabelas criadas via migrations também recebam permissão
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
-
--- Concede uso das sequences (necessário para IDs auto-incremento)
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    GRANT USAGE, SELECT ON SEQUENCES TO app_user;
-```
-
-### Comparativo de privilégios
-
-| Operação     | `postgres` (root) | `app_user` (aplicação) |
-|--------------|:-----------------:|:----------------------:|
-| SELECT       | ✅                | ✅                     |
-| INSERT       | ✅                | ✅                     |
-| UPDATE       | ✅                | ✅                     |
-| DELETE       | ✅                | ✅                     |
-| CREATE TABLE | ✅                | ❌                     |
-| DROP TABLE   | ✅                | ❌                     |
-| TRUNCATE     | ✅                | ❌                     |
-| GRANT/REVOKE | ✅                | ❌                     |
-
-> A aplicação **nunca usa o usuário root**. A `DATABASE_URL` aponta para `app_user`, que possui apenas as permissões necessárias para o funcionamento da API.
-
----
-
-## Docker Compose — Serviços, Rede e Volumes
-
-O arquivo [`docker-compose.yaml`](./docker-compose.yaml) define toda a infraestrutura do ambiente multi-container.
-
-```yaml
-volumes:
-  project-volume:       # Volume nomeado para persistência dos dados do PostgreSQL
-
-networks:
-  project-network:      # Rede isolada para comunicação entre containers
-    driver: bridge
-
-services:
-
-  # ──────────────────────────────────────────
-  # SERVIÇO: banco de dados PostgreSQL
-  # ──────────────────────────────────────────
-  postgres:
-    container_name: project-postgres
-    build:
-      context: .
-      dockerfile: Dockerfile.postgres
-    networks:
-      - project-network
-    restart: always
-    environment:
-      POSTGRES_USER: postgres          # Superusuário (administração interna)
-      POSTGRES_PASSWORD: root_secret
-      POSTGRES_DB: project_db
-      APP_DB_USER: app_user            # Passado ao script SQL de init
-      APP_DB_PASSWORD: app_secret
-    volumes:
-      - project-volume:/var/lib/postgresql/data   # Persistência dos dados
-    ports:
-      - '5430:5432'    # 5430 no host → 5432 no container (acesso externo opcional)
-
-  # ──────────────────────────────────────────
-  # SERVIÇO: API NestJS
-  # ──────────────────────────────────────────
-  api:
-    container_name: project
-    build: .
-    networks:
-      - project-network
-    restart: always
-    depends_on:
-      - postgres        # Garante que o postgres sobe antes da API
-    environment:
-      DATABASE_URL: 'postgresql://app_user:app_secret@postgres:5432/project_db?schema=public&connection_limit=30&connect_timeout=30'
-    ports:
-      - '3000:3000'
-```
-
-### Rede Customizada
-
-A rede `project-network` do tipo **bridge** isola a comunicação entre os containers:
-
-- Os containers se comunicam entre si usando o **nome do serviço como hostname** (ex: `postgres` em vez de um IP).
-- O banco de dados **não é acessível externamente** pela rede interna — apenas pela porta mapeada `5430` no host (útil para ferramentas como DBeaver ou pgAdmin durante o desenvolvimento).
-- Nenhum container da rede `project-network` é acessível por outros containers fora dessa rede.
-
-### Volume Nomeado
-
-O volume `project-volume` garante que os **dados do PostgreSQL persistam** entre reinicializações ou recriações dos containers:
-
-```
-project-volume → /var/lib/postgresql/data (dentro do container)
-```
-
-> Ao remover o container `project-postgres`, os dados permanecem no volume. Eles só são apagados ao executar `docker compose down -v`.
-
----
-
-## Executando os Containers
-
-### 1. Configurar as variáveis de ambiente
-
-```bash
-cp .env.example .env
-# Edite o arquivo .env com os valores desejados
-```
-
-### 2. Construir as imagens e subir os containers
-
-```bash
-docker compose up --build -d
-```
-
-| Flag      | Descrição                                          |
-|-----------|----------------------------------------------------|
-| `--build` | Reconstrói as imagens (necessário na primeira vez) |
-| `-d`      | Sobe os containers em modo detached (background)   |
-
-### 3. Verificar o status dos containers
-
-```bash
-docker compose ps
-```
-
-Saída esperada:
-
-```
-NAME                IMAGE                    STATUS    PORTS
-project             project-name-api         Up        0.0.0.0:3000->3000/tcp
-project-postgres    project-name-postgres    Up        0.0.0.0:5430->5432/tcp
-```
-
-### 4. Acompanhar os logs em tempo real
-
-```bash
-# Logs de todos os serviços
-docker compose logs -f
-
-# Logs apenas da API
-docker compose logs -f api
-
-# Logs apenas do banco de dados
-docker compose logs -f postgres
-```
-
-### 5. Parar os containers
-
-```bash
-# Para e remove os containers (mantém volumes e imagens)
-docker compose down
-
-# Para, remove containers E volumes (apaga os dados do banco!)
-docker compose down -v
-```
-
----
-
-## Testando a Conexão entre os Containers
-
-### Verificar se a API está respondendo
-
-```bash
-curl http://localhost:3000
-```
-
-### Verificar se o banco de dados está acessível (via host)
-
-Use um cliente PostgreSQL como `psql`, DBeaver ou pgAdmin com as seguintes configurações:
-
-| Campo   | Valor        |
-|---------|--------------|
-| Host    | `localhost`  |
-| Porta   | `5430`       |
-| Banco   | `project_db` |
-| Usuário | `app_user`   |
-| Senha   | `app_secret` |
-
-Ou via linha de comando:
-
-```bash
-# Conectar ao banco usando psql dentro do próprio container (como superusuário)
-docker exec -it project-postgres psql -U postgres -d project_db
-
-# Conectar como o usuário da aplicação (para testar as permissões restritas)
-docker exec -it project-postgres psql -U app_user -d project_db
-```
-
-### Verificar as migrations do Prisma
-
-```bash
-# Ver status das migrations aplicadas
-docker exec -it project npx prisma migrate status
-
-# Ver logs do container da API (confirmar que migrations rodaram na inicialização)
-docker compose logs api | grep -i "prisma"
-```
-
-### Testar a comunicação interna entre containers (dentro da rede)
-
-```bash
-# Acessar o shell do container da API
-docker exec -it project sh
-
-# Dentro do container, pingar o serviço do banco de dados pelo nome do serviço
-ping postgres
-
-# Testar a conectividade TCP com a porta do banco de dados
-nc -zv postgres 5432
-```
-
----
-
-## Comandos Úteis
-
-```bash
-# Reconstruir apenas a imagem da API sem cache
-docker compose build --no-cache api
-
-# Inspecionar a rede customizada e ver os containers conectados
-docker network inspect project-name_project-network
-
-# Listar todos os volumes Docker
-docker volume ls
-
-# Inspecionar o volume de dados do PostgreSQL
-docker volume inspect project-name_project-volume
-
-# Ver variáveis de ambiente injetadas em um container
-docker exec -it project env
-
-# Executar uma migration manualmente dentro do container da API
-docker exec -it project npx prisma migrate deploy
-
-# Abrir o Prisma Studio (interface visual do banco) — somente em desenvolvimento local
-DATABASE_URL="postgresql://app_user:app_secret@localhost:5430/project_db" npx prisma studio
-```
-
----
-
-## Integração Contínua (CI/CD) e Segurança
-
-Este projeto utiliza **GitHub Actions** para CI/CD e **Dependabot** para atualização automática de dependências, garantindo qualidade, segurança e versionamento automatizado.
-
-### 1. Workflow de CI/CD (`.github/workflows/ci.yml`)
-
-O workflow principal é ativado a cada `push` na branch `main` e realiza os seguintes passos:
-
-1. **Setup e Testes:** Configura o Node.js e executa os testes (`npm test`) para garantir a integridade do código.
-2. **Semantic Release:** Utiliza o comando nativo `npx semantic-release` (evitando wrappers de terceiros para maior segurança). Ele analisa as mensagens de commit, gera um *changelog*, cria tags e gerencia as versões de forma automática.
-3. **Push para o Amazon ECR:** Faz a autenticação na AWS utilizando OIDC (para não trafegar credenciais fixas), e realiza o build e push da imagem Docker da API para o Elastic Container Registry (ECR).
-4. **Deploy para o Amazon ECS:** Faz o deploy expresso do novo container para o cluster no ECS.
-
-### 2. Automação e Dependabot (`.github/dependabot.yml`)
-
-Foi configurado o **Dependabot** para monitorar e manter as dependências do projeto sempre seguras e atualizadas. Semanalmente, ele analisa e pode abrir Pull Requests automáticos para:
-
-- **NPM:** Mantém pacotes do `package.json` atualizados, como as bibliotecas do NestJS, Prisma e utilitários.
-- **Docker:** Monitora a imagem base (`node:26-alpine3.23` no `Dockerfile`) visando garantir as últimas correções de segurança.
-- **GitHub Actions:** Atualiza e fixa (*pinning*) as Actions do workflow com SHAs seguros, mitigando riscos de *supply chain attacks*.
+- **NPM:** Mantém pacotes do Node.js (`package.json`) seguros contra vulnerabilidades recém-descobertas.
+- **Docker:** Monitora atualizações da imagem `node` baseada no Alpine, aplicando *patches* do sistema operacional.
+- **GitHub Actions:** Atualiza as ações usadas no pipeline (ex: Checkout, AWS logins) e as converte para referências seguras via SHA (*pinning*), protegendo o ciclo de entrega de potenciais *supply chain attacks*.
