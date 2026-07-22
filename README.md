@@ -47,7 +47,7 @@ Este README documenta o processo completo de configuração, execução e testes
 |-----------------|---------------------|-------------|
 | API             | NestJS + TypeScript  | Node 26     |
 | ORM             | Prisma               | v7          |
-| Banco de dados  | PostgreSQL           | 16 (Alpine) |
+| Banco de dados  | PostgreSQL           | 18 (Alpine) |
 | Orquestrador    | Docker Compose       | v2+         |
 | Imagem base     | `node:26-alpine3.23` | Alpine      |
 
@@ -213,10 +213,9 @@ CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/main.js"]
 
 ## Dockerfile do PostgreSQL
 
-O arquivo [`Dockerfile.postgres`](./Dockerfile.postgres) estende a imagem oficial do PostgreSQL 16 Alpine para incluir o script de inicialização do usuário restrito da aplicação.
-
+O arquivo [`Dockerfile.postgres`](./Dockerfile.postgres) estende a imagem oficial do PostgreSQL 18 Alpine para incluir o script de inicialização do usuário restrito da aplicação.
 ```dockerfile
-FROM postgres:16-alpine
+FROM postgres:18-alpine
 
 # Copia o script de inicialização para o diretório especial do PostgreSQL.
 # Todos os arquivos .sql e .sh nesse diretório são executados automaticamente
@@ -486,3 +485,26 @@ docker exec -it project npx prisma migrate deploy
 # Abrir o Prisma Studio (interface visual do banco) — somente em desenvolvimento local
 DATABASE_URL="postgresql://app_user:app_secret@localhost:5430/project_db" npx prisma studio
 ```
+
+---
+
+## Integração Contínua (CI/CD) e Segurança
+
+Este projeto utiliza **GitHub Actions** para CI/CD e **Dependabot** para atualização automática de dependências, garantindo qualidade, segurança e versionamento automatizado.
+
+### 1. Workflow de CI/CD (`.github/workflows/ci.yml`)
+
+O workflow principal é ativado a cada `push` na branch `main` e realiza os seguintes passos:
+
+1. **Setup e Testes:** Configura o Node.js e executa os testes (`npm test`) para garantir a integridade do código.
+2. **Semantic Release:** Utiliza o comando nativo `npx semantic-release` (evitando wrappers de terceiros para maior segurança). Ele analisa as mensagens de commit, gera um *changelog*, cria tags e gerencia as versões de forma automática.
+3. **Push para o Amazon ECR:** Faz a autenticação na AWS utilizando OIDC (para não trafegar credenciais fixas), e realiza o build e push da imagem Docker da API para o Elastic Container Registry (ECR).
+4. **Deploy para o Amazon ECS:** Faz o deploy expresso do novo container para o cluster no ECS.
+
+### 2. Automação e Dependabot (`.github/dependabot.yml`)
+
+Foi configurado o **Dependabot** para monitorar e manter as dependências do projeto sempre seguras e atualizadas. Semanalmente, ele analisa e pode abrir Pull Requests automáticos para:
+
+- **NPM:** Mantém pacotes do `package.json` atualizados, como as bibliotecas do NestJS, Prisma e utilitários.
+- **Docker:** Monitora a imagem base (`node:26-alpine3.23` no `Dockerfile`) visando garantir as últimas correções de segurança.
+- **GitHub Actions:** Atualiza e fixa (*pinning*) as Actions do workflow com SHAs seguros, mitigando riscos de *supply chain attacks*.
