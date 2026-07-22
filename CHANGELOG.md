@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/LohanConrado/project.ci.api/compare/v1.1.0...v1.1.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* **deps-dev:** bump @types/supertest from 6.0.3 to 7.2.1 ([bc0cd2c](https://github.com/LohanConrado/project.ci.api/commit/bc0cd2c007759386e2cb3ab4a37f0a055ee8c09b))
+
 # [1.1.0](https://github.com/LohanConrado/project.ci.api/compare/v1.0.0...v1.1.0) (2026-07-22)
 
 
