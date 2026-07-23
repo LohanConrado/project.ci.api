@@ -56,7 +56,7 @@ jobs:
         run: |
           docker build -t $REGISTRY/project-ci-api:$TAG .
           docker tag $REGISTRY/project-ci-api:$TAG $REGISTRY/project-ci-api:latest
-          docker push --all-tags $REGISTRY/project-ci-api:latest
+          docker push --all-tags $REGISTRY/project-ci-api
           IMAGE=$(echo $REGISTRY/project-ci-api:$TAG)
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
